@@ -151,3 +151,64 @@ class Discriminator(nn.Module):
         out=self.last(out)
 
         return out.squeeze(), p1, p2
+
+
+class Encoder(nn.Module):
+    def __init__(self, batch_size, image_size=64, z_dim=100, conv_dim=64):
+        super(Encoder, self).__init__()
+        self.imsize = image_size
+        self.z_dim = z_dim
+        layer1 = []
+        layer2 = []
+        layer3 = []
+        last = []
+
+        layer1.append(SpectralNorm(nn.Conv2d(3, conv_dim, 4, 2, 1)))
+        layer1.append(nn.LeakyReLU(0.1))
+
+        curr_dim = conv_dim
+
+        layer2.append(SpectralNorm(nn.Conv2d(curr_dim, curr_dim * 2, 4, 2, 1)))
+        layer2.append(nn.LeakyReLU(0.1))
+        curr_dim = curr_dim * 2
+
+        layer3.append(SpectralNorm(nn.Conv2d(curr_dim, curr_dim * 2, 4, 2, 1)))
+        layer3.append(nn.LeakyReLU(0.1))
+        curr_dim = curr_dim * 2
+
+        if self.imsize == 64:
+            layer4 = []
+            layer4.append(SpectralNorm(nn.Conv2d(curr_dim, curr_dim * 2, 4, 2, 1)))
+            layer4.append(nn.LeakyReLU(0.1))
+            self.l4 = nn.Sequential(*layer4)
+            curr_dim = curr_dim * 2
+        self.l1 = nn.Sequential(*layer1)
+        self.l2 = nn.Sequential(*layer2)
+        self.l3 = nn.Sequential(*layer3)
+
+        last.append(nn.Conv2d(curr_dim, z_dim*2, 1))
+        self.last = nn.Sequential(*last)
+
+        self.attn1 = Self_Attn(256, 'relu')
+        self.attn2 = Self_Attn(512, 'relu')
+
+    def reparameterize(self, z):
+        # from https://github.com/mperezcarrasco/PyTorch-BiGAN/blob/master/model.py
+        z = z.view(z.size(0), -1)
+        mu, log_sigma = z[:, :self.z_dim], z[:, self.z_dim:]
+        std = torch.exp(log_sigma)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def forward(self, x):
+        out = self.l1(x)
+        out = self.l2(out)
+        out = self.l3(out)
+        out, p1 = self.attn1(out)
+        out = self.l4(out)
+        out, p2 = self.attn2(out)
+        out = self.last(out)
+        z = self.reparameterize(out)
+
+        return z.view(out.size(0), self.z_dim, 1, 1), p1, p2
+

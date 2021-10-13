@@ -32,7 +32,13 @@ class Data_Loader():
 
     def load_celeb(self):
         transforms = self.transform(True, True, True, True)
+        # dataset = dsets.CelebA(self.path, download=True, transform=transforms)
         dataset = dsets.ImageFolder(self.path+'/CelebA', transform=transforms)
+        return dataset
+
+    def load_mnist(self):
+        transforms= self.transform(True, True, True, True)
+        dataset = dsets.MNIST(self.path, download=True, transform=transforms)
         return dataset
 
 
@@ -41,6 +47,8 @@ class Data_Loader():
             dataset = self.load_lsun()
         elif self.dataset == 'celeb':
             dataset = self.load_celeb()
+        elif self.dataset == 'mnist':
+            dataset = self.load_mnist()
 
         loader = torch.utils.data.DataLoader(dataset=dataset,
                                               batch_size=self.batch,
