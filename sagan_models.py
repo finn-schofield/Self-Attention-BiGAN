@@ -104,7 +104,7 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     """Discriminator, Auxiliary Classifier."""
 
-    def __init__(self, batch_size=64, image_size=64, conv_dim=64):
+    def __init__(self, batch_size=64, image_size=64, conv_dim=64, z_dim=100):
         super(Discriminator, self).__init__()
         self.imsize = image_size
         layer1 = []
@@ -141,7 +141,16 @@ class Discriminator(nn.Module):
         self.attn1 = Self_Attn(256, 'relu')
         self.attn2 = Self_Attn(512, 'relu')
 
-    def forward(self, x):
+        # Inference over z
+        self.conv1z = nn.Conv2d(z_dim, 512, 1, stride=1, bias=False)
+        self.conv2z = nn.Conv2d(512, 512, 1, stride=1, bias=False)
+
+        # Joint inference
+        self.conv1xz = nn.Conv2d(1024, 1024, 1, stride=1, bias=False)
+        self.conv2xz = nn.Conv2d(1024, 1024, 1, stride=1, bias=False)
+        self.conv3xz = nn.Conv2d(1024, 1, 1, stride=1, bias=False)
+
+    def forward(self, x, z):
         out = self.l1(x)
         out = self.l2(out)
         out = self.l3(out)

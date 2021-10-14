@@ -8,7 +8,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 from torchvision.utils import save_image
 
-from sagan_models import Generator, Discriminator
+from sagan_models import Generator, Discriminator, Encoder
 from utils import *
 
 class Trainer(object):
@@ -91,6 +91,7 @@ class Trainer(object):
             # ================== Train D ================== #
             self.D.train()
             self.G.train()
+            self.E.train()
 
             try:
                 real_images, _ = next(data_iter)
@@ -101,16 +102,17 @@ class Trainer(object):
             # Compute loss with real images
             # dr1, dr2, df1, df2, gf1, gf2 are attention scores
             real_images = tensor2var(real_images)
-            d_out_real,dr1,dr2 = self.D(real_images)
+            z_true = self.E(real_images) # latent space encoding of real images
+            d_out_real,dr1,dr2 = self.D(real_images, z_true)
             if self.adv_loss == 'wgan-gp':
                 d_loss_real = - torch.mean(d_out_real)
             elif self.adv_loss == 'hinge':
                 d_loss_real = torch.nn.ReLU()(1.0 - d_out_real).mean()
 
             # apply Gumbel Softmax
-            z = tensor2var(torch.randn(real_images.size(0), self.z_dim))
-            fake_images,gf1,gf2 = self.G(z)
-            d_out_fake,df1,df2 = self.D(fake_images)
+            z_fake = tensor2var(torch.randn(real_images.size(0), self.z_dim))
+            fake_images,gf1,gf2 = self.G(z_fake)
+            d_out_fake,df1,df2 = self.D(fake_images, z_fake)
 
             if self.adv_loss == 'wgan-gp':
                 d_loss_fake = d_out_fake.mean()
@@ -163,7 +165,7 @@ class Trainer(object):
 
             self.reset_grad()
             g_loss_fake.backward()
-            self.g_optimizer.step()
+            self.ge_optimizer.step()
 
 
             # Print out log info
@@ -191,14 +193,17 @@ class Trainer(object):
     def build_model(self):
 
         self.G = Generator(self.batch_size,self.imsize, self.z_dim, self.g_conv_dim).cuda()
-        self.D = Discriminator(self.batch_size,self.imsize, self.d_conv_dim).cuda()
+        self.D = Discriminator(self.batch_size,self.imsize, self.d_conv_dim, self.z_dim).cuda()
+        self.E = Encoder(self.batch_size, self.imsize,self.z_dim, self.d_conv_dim).cuda()
         if self.parallel:
             self.G = nn.DataParallel(self.G)
             self.D = nn.DataParallel(self.D)
+            self.E = nn.DataParallel(self.E)
 
         # Loss and optimizer
         # self.g_optimizer = torch.optim.Adam(self.G.parameters(), self.g_lr, [self.beta1, self.beta2])
-        self.g_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.G.parameters()), self.g_lr, [self.beta1, self.beta2])
+        self.ge_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, list(self.G.parameters()) + list(self.E.parameters())),
+                                            self.g_lr, [self.beta1, self.beta2])
         self.d_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.D.parameters()), self.d_lr, [self.beta1, self.beta2])
 
         self.c_loss = torch.nn.CrossEntropyLoss()
@@ -219,7 +224,7 @@ class Trainer(object):
 
     def reset_grad(self):
         self.d_optimizer.zero_grad()
-        self.g_optimizer.zero_grad()
+        self.ge_optimizer.zero_grad()
 
     def save_sample(self, data_iter):
         real_images, _ = next(data_iter)
