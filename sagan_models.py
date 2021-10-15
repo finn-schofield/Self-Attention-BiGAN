@@ -145,11 +145,6 @@ class Discriminator(nn.Module):
         self.conv1z = nn.Conv2d(z_dim, 512, 1, stride=1, bias=False)
         self.conv2z = nn.Conv2d(512, 512, 1, stride=1, bias=False)
 
-        # Joint inference
-        self.conv1xz = nn.Conv2d(1024, 1024, 1, stride=1, bias=False)
-        self.conv2xz = nn.Conv2d(1024, 1024, 1, stride=1, bias=False)
-        self.conv3xz = nn.Conv2d(1024, 1, 1, stride=1, bias=False)
-
     def forward(self, x, z):
         out = self.l1(x)
         out = self.l2(out)
@@ -159,7 +154,10 @@ class Discriminator(nn.Module):
         out,p2 = self.attn2(out)
         out=self.last(out)
 
-        return out.squeeze(), p1, p2
+        z_inf = self.conv1z(z)
+        z_inf = self.conv2z(z_inf)
+
+        return (out + z_inf).squeeze(), p1, p2
 
 
 class Encoder(nn.Module):
