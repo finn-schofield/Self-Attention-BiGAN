@@ -157,7 +157,7 @@ class Trainer(object):
             fake_images,_,_ = self.G(z)
 
             # Compute loss with fake images
-            g_out_fake,_,_ = self.D(fake_images)  # batch x n
+            g_out_fake,_,_ = self.D(fake_images, z)  # batch x n
             if self.adv_loss == 'wgan-gp':
                 g_loss_fake = - g_out_fake.mean()
             elif self.adv_loss == 'hinge':
